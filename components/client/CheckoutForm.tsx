@@ -1,0 +1,277 @@
+"use client";
+
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useCart } from "@/context/CartContext";
+import { createOrder, getStoreCatalog } from "@/lib/demo-db";
+import { formatCurrency, formatPhone } from "@/lib/format";
+import type { Neighborhood, PaymentMethod, StoreCatalog } from "@/lib/types";
+import { Trash2 } from "lucide-react";
+
+export function CheckoutForm({ storeSlug }: { storeSlug: string }) {
+  const router = useRouter();
+  const { store, items, subtotal, removeItem, clear } = useCart();
+  const [catalog, setCatalog] = useState<StoreCatalog | null>(null);
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [orderType, setOrderType] = useState<"delivery" | "pickup">("delivery");
+  const [neighborhoodId, setNeighborhoodId] = useState("");
+  const [address, setAddress] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("pix");
+  const [changeFor, setChangeFor] = useState("");
+  const [notes, setNotes] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    const data = getStoreCatalog(storeSlug);
+    setCatalog(data);
+    if (data?.neighborhoods[0]) {
+      setNeighborhoodId(data.neighborhoods[0].id);
+    }
+  }, [storeSlug]);
+
+  const selectedNeighborhood: Neighborhood | undefined = catalog?.neighborhoods.find(
+    (item) => item.id === neighborhoodId,
+  );
+  const deliveryFee = orderType === "delivery" ? (selectedNeighborhood?.delivery_fee ?? 0) : 0;
+  const total = subtotal + deliveryFee;
+
+  const paymentOptions = useMemo(
+    () => [
+      {
+        value: "pix" as const,
+        title: "PIX no Site",
+        description: "Gera o PIX Copia e Cola com o valor exato.",
+      },
+      {
+        value: "card" as const,
+        title: "Cartão na Entrega",
+        description: "O entregador leva a maquininha.",
+      },
+      {
+        value: "cash" as const,
+        title: "Dinheiro",
+        description: "Pagar no momento da entrega.",
+      },
+    ],
+    [],
+  );
+
+  async function onSubmit(event: FormEvent) {
+    event.preventDefault();
+    if (!name.trim() || !phone.trim()) {
+      window.alert("Informe nome e WhatsApp para enviar o pedido.");
+      return;
+    }
+    if (orderType === "delivery" && (!neighborhoodId || !address.trim())) {
+      window.alert("Selecione o bairro e informe o endereço completo.");
+      return;
+    }
+    if (items.length === 0) return;
+
+    setSubmitting(true);
+    const order = createOrder({
+      storeId: store.id,
+      customerName: name.trim(),
+      customerPhone: phone,
+      orderType,
+      address: orderType === "delivery" ? address.trim() : null,
+      neighborhoodId: orderType === "delivery" ? neighborhoodId : null,
+      paymentMethod,
+      changeFor:
+        paymentMethod === "cash" && changeFor
+          ? Number(changeFor.replace(",", "."))
+          : null,
+      notes: notes.trim() || null,
+      items,
+      totalAmount: total,
+    });
+    clear();
+    router.push(`/${storeSlug}/status/${order.id}`);
+  }
+
+  if (items.length === 0) {
+    return (
+      <div className="max-w-4xl mx-auto p-6 bg-white rounded-2xl border text-center">
+        <p className="font-bold">Seu carrinho está vazio.</p>
+        <Link href={`/${storeSlug}`} className="text-sm underline mt-2 inline-block">
+          Voltar ao cardápio
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={onSubmit} className="max-w-4xl mx-auto p-4 space-y-4 pb-8">
+      <Link href={`/${storeSlug}`} className="text-xs text-gray-600 font-bold mb-2 inline-flex">
+        ← Voltar ao cardápio
+      </Link>
+
+      <section className="bg-white p-5 rounded-xl border shadow-sm space-y-3">
+        <h2 className="font-bold text-lg">Itens</h2>
+        {items.map((item) => (
+          <div key={item.id} className="flex justify-between gap-3 text-sm border-b pb-2">
+            <div>
+              <div className="font-medium">
+                {item.quantity}x {item.name}
+              </div>
+              {item.optionsSelected.length > 0 ? (
+                <div className="text-xs text-gray-500">
+                  {item.optionsSelected.map((option) => option.name).join(", ")}
+                </div>
+              ) : null}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="font-bold">{formatCurrency(item.unitPrice * item.quantity)}</span>
+              <button type="button" onClick={() => removeItem(item.id)} aria-label="Remover">
+                <Trash2 className="size-4 text-gray-400" />
+              </button>
+            </div>
+          </div>
+        ))}
+      </section>
+
+      <section className="bg-white p-5 rounded-xl border shadow-sm">
+        <h2 className="font-bold text-lg mb-4">1. Dados do Cliente</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <label className="block text-xs font-bold text-gray-700">
+            Seu Nome *
+            <input
+              required
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              className="mt-1 w-full border rounded-lg p-2 text-sm outline-none focus:ring-2"
+            />
+          </label>
+          <label className="block text-xs font-bold text-gray-700">
+            WhatsApp *
+            <input
+              required
+              value={phone}
+              onChange={(event) => setPhone(formatPhone(event.target.value))}
+              className="mt-1 w-full border rounded-lg p-2 text-sm outline-none focus:ring-2"
+            />
+          </label>
+        </div>
+      </section>
+
+      <section className="bg-white p-5 rounded-xl border shadow-sm">
+        <h2 className="font-bold text-lg mb-4">2. Entrega ou Retirada</h2>
+        <div className="flex gap-4 mb-4">
+          <label className="flex items-center gap-2 text-sm font-bold cursor-pointer">
+            <input
+              type="radio"
+              checked={orderType === "delivery"}
+              onChange={() => setOrderType("delivery")}
+            />
+            Delivery
+          </label>
+          <label className="flex items-center gap-2 text-sm font-bold cursor-pointer">
+            <input
+              type="radio"
+              checked={orderType === "pickup"}
+              onChange={() => setOrderType("pickup")}
+            />
+            Retirada na Loja
+          </label>
+        </div>
+
+        {orderType === "delivery" ? (
+          <div className="space-y-3">
+            <label className="block text-xs font-bold text-gray-700">
+              Selecione o Bairro *
+              <select
+                value={neighborhoodId}
+                onChange={(event) => setNeighborhoodId(event.target.value)}
+                className="mt-1 w-full border rounded-lg p-2 text-sm"
+              >
+                {catalog?.neighborhoods.map((neighborhood) => (
+                  <option key={neighborhood.id} value={neighborhood.id}>
+                    {neighborhood.name} (Taxa: {formatCurrency(neighborhood.delivery_fee)})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-xs font-bold text-gray-700">
+              Endereço Completo *
+              <input
+                value={address}
+                onChange={(event) => setAddress(event.target.value)}
+                className="mt-1 w-full border rounded-lg p-2 text-sm"
+              />
+            </label>
+          </div>
+        ) : null}
+      </section>
+
+      <section className="bg-white p-5 rounded-xl border shadow-sm">
+        <h2 className="font-bold text-lg mb-4">3. Forma de Pagamento</h2>
+        <div className="space-y-2">
+          {paymentOptions.map((option) => (
+            <label
+              key={option.value}
+              className="flex items-center gap-2 p-3 border rounded-lg cursor-pointer hover:bg-gray-50"
+            >
+              <input
+                type="radio"
+                checked={paymentMethod === option.value}
+                onChange={() => setPaymentMethod(option.value)}
+              />
+              <div>
+                <span className="font-bold text-sm block">{option.title}</span>
+                <span className="text-xs text-gray-500 block">{option.description}</span>
+              </div>
+            </label>
+          ))}
+        </div>
+        {paymentMethod === "cash" ? (
+          <label className="block text-xs font-bold text-gray-700 mt-3">
+            Precisa de troco para quanto?
+            <input
+              value={changeFor}
+              onChange={(event) => setChangeFor(event.target.value)}
+              placeholder="Ex: 50,00"
+              className="mt-1 w-full border rounded-lg p-2 text-sm"
+            />
+          </label>
+        ) : null}
+        <label className="block text-xs font-bold text-gray-700 mt-3">
+          Observação geral do pedido
+          <textarea
+            value={notes}
+            onChange={(event) => setNotes(event.target.value)}
+            className="mt-1 w-full border rounded-lg p-2 text-sm"
+            rows={2}
+          />
+        </label>
+      </section>
+
+      <section className="bg-slate-900 text-white p-5 rounded-xl space-y-2">
+        <div className="flex justify-between text-sm">
+          <span>Subtotal:</span>
+          <span>{formatCurrency(subtotal)}</span>
+        </div>
+        <div className="flex justify-between text-sm">
+          <span>Taxa de Entrega:</span>
+          <span>{formatCurrency(deliveryFee)}</span>
+        </div>
+        <div
+          className="flex justify-between text-lg font-black border-t border-slate-700 pt-2"
+          style={{ color: store.primary_color }}
+        >
+          <span>Total:</span>
+          <span>{formatCurrency(total)}</span>
+        </div>
+        <button
+          type="submit"
+          disabled={submitting}
+          className="w-full text-slate-950 font-black py-3 rounded-xl mt-4 text-center text-base hover:opacity-90 disabled:opacity-60"
+          style={{ backgroundColor: store.primary_color }}
+        >
+          Enviar Pedido para a Loja
+        </button>
+      </section>
+    </form>
+  );
+}
