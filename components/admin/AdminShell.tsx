@@ -35,6 +35,8 @@ export function AdminShell({
 
   const onSettings = pathname?.includes("/settings");
   const onCouriers = pathname?.includes("/couriers");
+  const onDashboard = pathname?.includes("/dashboard");
+  const onOrders = !onSettings && !onCouriers && !onDashboard;
 
   return (
     <div>
@@ -62,10 +64,18 @@ export function AdminShell({
             <Link
               href={`/${storeSlug}/admin`}
               className={`text-xs px-3 py-1.5 rounded-lg font-bold ${
-                !onSettings && !onCouriers ? "bg-white text-slate-900" : "bg-slate-800 hover:bg-slate-700"
+                onOrders ? "bg-white text-slate-900" : "bg-slate-800 hover:bg-slate-700"
               }`}
             >
               Pedidos
+            </Link>
+            <Link
+              href={`/${storeSlug}/admin/dashboard`}
+              className={`text-xs px-3 py-1.5 rounded-lg font-bold ${
+                onDashboard ? "bg-white text-slate-900" : "bg-slate-800 hover:bg-slate-700"
+              }`}
+            >
+              Dashboard
             </Link>
             <Link
               href={`/${storeSlug}/admin/couriers`}
