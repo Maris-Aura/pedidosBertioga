@@ -310,6 +310,38 @@ export function assignCourier(orderId: string, courierId: string | null) {
   return hydrateOrder(db, order);
 }
 
+export function createTestDeliveryOrder(storeSlug: string) {
+  const catalog = getStoreCatalog(storeSlug);
+  if (!catalog) return null;
+  const product = catalog.products[0];
+  const neighborhood = catalog.neighborhoods[0];
+  return createOrder({
+    storeId: catalog.store.id,
+    customerName: "Cliente Teste",
+    customerPhone: "13988880000",
+    orderType: "delivery",
+    address: "Rua das Palmeiras, 120",
+    neighborhoodId: neighborhood?.id ?? null,
+    paymentMethod: "pix",
+    changeFor: null,
+    notes: "Pedido teste para acompanhar o andamento",
+    items: product
+      ? [
+          {
+            id: crypto.randomUUID(),
+            productId: product.id,
+            name: product.name,
+            quantity: 1,
+            unitPrice: product.price,
+            observation: "",
+            optionsSelected: [],
+          },
+        ]
+      : [],
+    totalAmount: (product?.price ?? 0) + (neighborhood?.delivery_fee ?? 0),
+  });
+}
+
 export function demoLogin(email: string, password: string) {
   const normalized = email.trim().toLowerCase();
   const pass = password.trim();

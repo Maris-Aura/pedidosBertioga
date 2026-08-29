@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { demoLogin, getStoreBySlug } from "@/lib/demo-db";
 import { FieldNotice } from "@/components/ui/Notice";
+import { PasswordField } from "@/components/ui/PasswordField";
 
 export function AdminLoginForm({ storeSlug }: { storeSlug: string }) {
   const router = useRouter();
@@ -11,6 +12,7 @@ export function AdminLoginForm({ storeSlug }: { storeSlug: string }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const store = getStoreBySlug(storeSlug);
 
   async function onSubmit(event: FormEvent) {
@@ -90,14 +92,16 @@ export function AdminLoginForm({ storeSlug }: { storeSlug: string }) {
       </label>
       <label className="block text-xs font-bold">
         Senha
-        <input
-          type="password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          className="mt-1 w-full border rounded-lg p-2 text-sm"
-          autoComplete="current-password"
-          required
-        />
+        <div className="mt-1">
+          <PasswordField
+            value={password}
+            onChange={setPassword}
+            reveal={showPassword}
+            onRevealChange={setShowPassword}
+            autoComplete="current-password"
+            required
+          />
+        </div>
       </label>
       <button
         type="submit"

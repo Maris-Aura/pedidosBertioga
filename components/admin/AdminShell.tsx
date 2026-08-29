@@ -34,6 +34,7 @@ export function AdminShell({
   }
 
   const onSettings = pathname?.includes("/settings");
+  const onCouriers = pathname?.includes("/couriers");
 
   return (
     <div>
@@ -59,10 +60,28 @@ export function AdminShell({
               {store.accepting_orders ? "Loja aberta" : "Loja fechada"}
             </button>
             <Link
-              href={onSettings ? `/${storeSlug}/admin` : `/${storeSlug}/admin/settings`}
-              className="text-xs bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg font-bold"
+              href={`/${storeSlug}/admin`}
+              className={`text-xs px-3 py-1.5 rounded-lg font-bold ${
+                !onSettings && !onCouriers ? "bg-white text-slate-900" : "bg-slate-800 hover:bg-slate-700"
+              }`}
             >
-              {onSettings ? "Pedidos" : "Configurações"}
+              Pedidos
+            </Link>
+            <Link
+              href={`/${storeSlug}/admin/couriers`}
+              className={`text-xs px-3 py-1.5 rounded-lg font-bold ${
+                onCouriers ? "bg-white text-slate-900" : "bg-slate-800 hover:bg-slate-700"
+              }`}
+            >
+              Planilha
+            </Link>
+            <Link
+              href={`/${storeSlug}/admin/settings`}
+              className={`text-xs px-3 py-1.5 rounded-lg font-bold ${
+                onSettings ? "bg-white text-slate-900" : "bg-slate-800 hover:bg-slate-700"
+              }`}
+            >
+              Configurações
             </Link>
             <button
               type="button"

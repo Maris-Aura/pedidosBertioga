@@ -14,6 +14,7 @@ import type { Store, StoreUser } from "@/lib/types";
 import { StoreMark } from "@/components/ui/StoreMark";
 import { SuccessNotice } from "@/components/ui/Notice";
 import { MasterStoreUsers } from "./MasterStoreUsers";
+import { ImagePicker } from "@/components/ui/ImagePicker";
 
 export function MasterDashboard() {
   const router = useRouter();
@@ -112,12 +113,14 @@ export function MasterDashboard() {
           placeholder="Horário (ex: 11:00–22:00)"
           className="border rounded-lg p-2 text-sm"
         />
-        <input
-          value={logoUrl}
-          onChange={(event) => setLogoUrl(event.target.value)}
-          placeholder="URL do logo"
-          className="border rounded-lg p-2 text-sm md:col-span-2"
-        />
+        <div className="md:col-span-2">
+          <ImagePicker
+            label="Logo da loja"
+            kind="logo"
+            value={logoUrl}
+            onChange={setLogoUrl}
+          />
+        </div>
         <label className="text-xs font-bold flex items-center gap-2">
           Cor principal
           <input type="color" value={color} onChange={(event) => setColor(event.target.value)} />

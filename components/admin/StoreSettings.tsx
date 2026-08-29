@@ -22,6 +22,7 @@ import type {
 } from "@/lib/types";
 import { formatCurrency } from "@/lib/format";
 import { SuccessNotice } from "@/components/ui/Notice";
+import { ImagePicker } from "@/components/ui/ImagePicker";
 
 type Tab = "store" | "menu" | "neighborhoods" | "couriers" | "payment";
 
@@ -103,15 +104,12 @@ function StoreTab({ catalog }: { catalog: StoreCatalog }) {
           className="mt-1 w-full border rounded-lg p-2 text-sm"
         />
       </label>
-      <label className="block text-xs font-bold">
-        URL do logo
-        <input
-          value={logoUrl}
-          onChange={(event) => setLogoUrl(event.target.value)}
-          placeholder="/stores/acai.svg ou https://..."
-          className="mt-1 w-full border rounded-lg p-2 text-sm"
-        />
-      </label>
+      <ImagePicker
+        label="Logo da loja"
+        kind="logo"
+        value={logoUrl}
+        onChange={setLogoUrl}
+      />
       <p className="text-[11px] text-gray-500">
         Aberto/fechado para pedidos é controlado no topo do painel da cozinha.
       </p>
@@ -197,11 +195,10 @@ function MenuTab({ catalog }: { catalog: StoreCatalog }) {
           placeholder="Descrição"
           className="border rounded-lg p-2 text-sm md:col-span-2"
         />
-        <input
+        <ImagePicker
+          label="Foto do produto"
           value={imageUrl}
-          onChange={(event) => setImageUrl(event.target.value)}
-          placeholder="URL da foto"
-          className="border rounded-lg p-2 text-sm md:col-span-2"
+          onChange={setImageUrl}
         />
         <select
           value={categoryId}
@@ -227,7 +224,15 @@ function MenuTab({ catalog }: { catalog: StoreCatalog }) {
             .map((product) => (
               <div key={product.id} className="border rounded-lg p-3 space-y-2">
                 <div className="flex justify-between gap-2 text-sm">
-                  <span>
+                  <span className="flex items-center gap-2 min-w-0">
+                    {product.image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={product.image_url}
+                        alt=""
+                        className="size-8 rounded-md object-cover border"
+                      />
+                    ) : null}
                     {product.name} · {formatCurrency(product.price)}
                   </span>
                   <div className="flex gap-2">
@@ -296,11 +301,10 @@ function ProductEditor({ product }: { product: CatalogProduct }) {
           onChange={(event) => setDescription(event.target.value)}
           className="border rounded-lg p-2 text-sm md:col-span-2"
         />
-        <input
+        <ImagePicker
+          label="Foto do produto"
           value={imageUrl}
-          onChange={(event) => setImageUrl(event.target.value)}
-          placeholder="URL da foto"
-          className="border rounded-lg p-2 text-sm md:col-span-2"
+          onChange={setImageUrl}
         />
         <button className="bg-slate-900 text-white text-xs font-bold px-3 py-2 rounded-lg">
           Atualizar produto

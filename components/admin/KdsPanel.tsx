@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   assignCourier,
+  createTestDeliveryOrder,
   getOrdersByStore,
   getStoreCatalog,
   subscribeDemoDb,
@@ -107,6 +108,13 @@ export function KdsPanel({ storeSlug }: { storeSlug: string }) {
         <p className="text-xs text-gray-500">
           {catalog.store.name} · colunas por status · o alarme só para ao aceitar
         </p>
+        <button
+          type="button"
+          onClick={() => createTestDeliveryOrder(storeSlug)}
+          className="mt-2 text-xs font-bold bg-white border px-3 py-1.5 rounded-lg"
+        >
+          Criar pedido teste
+        </button>
       </div>
 
       {orders.filter((order) => order.status !== "delivered").length === 0 ? (
