@@ -2,13 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { getOrdersByStore, getStoreCatalog, subscribeDemoDb } from "@/lib/demo-db";
+import { startOrdersPolling } from "@/lib/orders-sync";
+import { downloadCsv } from "@/lib/csv";
+import { formatCurrency, formatDateTime, PAYMENT_LABEL, shortOrderId } from "@/lib/format";
 import { buildStoreDashboard, changePercent, type SeriesPoint } from "@/lib/store-dashboard";
 
 function deltaOrNone(current: number, previous: number) {
   if (current === 0 && previous === 0) return undefined;
   return changePercent(current, previous);
 }
-import { formatCurrency, PAYMENT_LABEL } from "@/lib/format";
 import type { OrderWithDetails, StoreCatalog } from "@/lib/types";
 
 export function StoreDashboard({ storeSlug }: { storeSlug: string }) {
@@ -22,7 +24,13 @@ export function StoreDashboard({ storeSlug }: { storeSlug: string }) {
       if (data) setOrders(getOrdersByStore(data.store.id));
     };
     load();
-    return subscribeDemoDb(load);
+    const data = getStoreCatalog(storeSlug);
+    const stopPoll = data ? startOrdersPolling(data.store.id, load) : undefined;
+    const unsub = subscribeDemoDb(load);
+    return () => {
+      unsub();
+      stopPoll?.();
+    };
   }, [storeSlug]);
 
   const data = useMemo(() => buildStoreDashboard(orders), [orders]);
@@ -36,6 +44,26 @@ export function StoreDashboard({ storeSlug }: { storeSlug: string }) {
         <p className="text-sm text-gray-500 mt-1">
           {catalog.store.name} · vendas, pedidos e clientes desta loja.
         </p>
+        <button
+          type="button"
+          onClick={() =>
+            downloadCsv(
+              `vendas-${storeSlug}.csv`,
+              ["Pedido", "Data", "Cliente", "Total", "Status", "Tipo"],
+              orders.map((order) => [
+                shortOrderId(order.id),
+                formatDateTime(order.created_at),
+                order.customer_name,
+                order.total_amount,
+                order.status,
+                order.order_type,
+              ]),
+            )
+          }
+          className="mt-2 text-xs font-bold bg-white border px-3 py-1.5 rounded-lg"
+        >
+          Exportar planilha
+        </button>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

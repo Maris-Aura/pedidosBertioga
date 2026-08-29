@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { getOrdersByStore, getStoreCatalog, subscribeDemoDb } from "@/lib/demo-db";
+import { downloadCsv } from "@/lib/csv";
+import { startOrdersPolling } from "@/lib/orders-sync";
 import { buildCourierReport, type CourierPeriod } from "@/lib/courier-report";
 import { formatCurrency, formatDateTime, orderStatusLabel, shortOrderId } from "@/lib/format";
 import type { OrderWithDetails, StoreCatalog } from "@/lib/types";
@@ -27,7 +29,13 @@ export function CourierSheet({ storeSlug }: { storeSlug: string }) {
       if (data) setOrders(getOrdersByStore(data.store.id));
     };
     load();
-    return subscribeDemoDb(load);
+    const data = getStoreCatalog(storeSlug);
+    const stopPoll = data ? startOrdersPolling(data.store.id, load) : undefined;
+    const unsub = subscribeDemoDb(load);
+    return () => {
+      unsub();
+      stopPoll?.();
+    };
   }, [storeSlug]);
 
   const rows = useMemo(
@@ -53,6 +61,19 @@ export function CourierSheet({ storeSlug }: { storeSlug: string }) {
         <p className="text-sm text-gray-500 mt-1">
           Entregas concluídas, taxas e histórico de cada motoboy.
         </p>
+        <button
+          type="button"
+          onClick={() =>
+            downloadCsv(
+              `motoboys-${storeSlug}-${period}.csv`,
+              ["Motoboy", "Entregas", "Taxas", "Pedidos"],
+              rows.map((row) => [row.name, row.deliveries, row.fees, row.sales]),
+            )
+          }
+          className="mt-2 text-xs font-bold bg-white border px-3 py-1.5 rounded-lg"
+        >
+          Exportar planilha
+        </button>
       </div>
 
       <div className="flex gap-2 flex-wrap">

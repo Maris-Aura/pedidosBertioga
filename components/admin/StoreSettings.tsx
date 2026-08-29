@@ -3,19 +3,24 @@
 import { FormEvent, useEffect, useState } from "react";
 import {
   getStoreCatalog,
+  getStoreCoupons,
   patchStore,
+  removeCoupon,
   removeNeighborhood,
   removeProduct,
   removeProductOption,
   saveCategory,
+  saveCoupon,
   saveCourier,
   saveNeighborhood,
   saveProduct,
   saveProductOption,
+  setProductSoldOut,
   subscribeDemoDb,
 } from "@/lib/demo-db";
 import type {
   CatalogProduct,
+  Coupon,
   OptionItem,
   ProductOption,
   StoreCatalog,
@@ -24,14 +29,14 @@ import { formatCurrency } from "@/lib/format";
 import { SuccessNotice } from "@/components/ui/Notice";
 import { ImagePicker } from "@/components/ui/ImagePicker";
 
-type Tab = "store" | "menu" | "neighborhoods" | "couriers" | "payment";
+type Tab = "store" | "menu" | "neighborhoods" | "couriers" | "payment" | "coupons";
 
 export function StoreSettings({ storeSlug }: { storeSlug: string }) {
   const [tab, setTab] = useState<Tab>("menu");
   const [catalog, setCatalog] = useState<StoreCatalog | null>(null);
 
   useEffect(() => {
-    const load = () => setCatalog(getStoreCatalog(storeSlug));
+    const load = () => setCatalog(getStoreCatalog(storeSlug, { includeSoldOut: true }));
     load();
     return subscribeDemoDb(load);
   }, [storeSlug]);
@@ -44,6 +49,7 @@ export function StoreSettings({ storeSlug }: { storeSlug: string }) {
     { id: "neighborhoods", label: "Bairros" },
     { id: "couriers", label: "Entregadores" },
     { id: "payment", label: "Pagamento" },
+    { id: "coupons", label: "Cupons" },
   ];
 
   return (
@@ -69,6 +75,7 @@ export function StoreSettings({ storeSlug }: { storeSlug: string }) {
       {tab === "neighborhoods" ? <NeighborhoodsTab catalog={catalog} /> : null}
       {tab === "couriers" ? <CouriersTab catalog={catalog} /> : null}
       {tab === "payment" ? <PaymentTab catalog={catalog} /> : null}
+      {tab === "coupons" ? <CouponsTab catalog={catalog} /> : null}
     </div>
   );
 }
@@ -76,6 +83,10 @@ export function StoreSettings({ storeSlug }: { storeSlug: string }) {
 function StoreTab({ catalog }: { catalog: StoreCatalog }) {
   const [hours, setHours] = useState(catalog.store.hours);
   const [logoUrl, setLogoUrl] = useState(catalog.store.logo_url ?? "");
+  const [whatsapp, setWhatsapp] = useState(catalog.store.whatsapp ?? "");
+  const [sundayFee, setSundayFee] = useState(String(catalog.store.extra_sunday_fee ?? 0));
+  const [nightFee, setNightFee] = useState(String(catalog.store.extra_night_fee ?? 0));
+  const [nightStarts, setNightStarts] = useState(catalog.store.night_starts_at ?? "22:00");
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
@@ -88,6 +99,10 @@ function StoreTab({ catalog }: { catalog: StoreCatalog }) {
     patchStore(catalog.store.id, {
       hours: hours.trim() || "11:00–22:00",
       logo_url: logoUrl.trim() || null,
+      whatsapp: whatsapp.trim(),
+      extra_sunday_fee: Number(sundayFee.replace(",", ".")) || 0,
+      extra_night_fee: Number(nightFee.replace(",", ".")) || 0,
+      night_starts_at: nightStarts.trim() || "22:00",
     });
     setSaved(true);
     window.setTimeout(() => setSaved(false), 2000);
@@ -104,6 +119,42 @@ function StoreTab({ catalog }: { catalog: StoreCatalog }) {
           className="mt-1 w-full border rounded-lg p-2 text-sm"
         />
       </label>
+      <label className="block text-xs font-bold">
+        WhatsApp da loja
+        <input
+          value={whatsapp}
+          onChange={(event) => setWhatsapp(event.target.value)}
+          placeholder="13 99999-9999"
+          className="mt-1 w-full border rounded-lg p-2 text-sm"
+        />
+      </label>
+      <div className="grid md:grid-cols-3 gap-2">
+        <label className="block text-xs font-bold">
+          Taxa extra domingo
+          <input
+            value={sundayFee}
+            onChange={(event) => setSundayFee(event.target.value)}
+            className="mt-1 w-full border rounded-lg p-2 text-sm"
+          />
+        </label>
+        <label className="block text-xs font-bold">
+          Taxa extra noturna
+          <input
+            value={nightFee}
+            onChange={(event) => setNightFee(event.target.value)}
+            className="mt-1 w-full border rounded-lg p-2 text-sm"
+          />
+        </label>
+        <label className="block text-xs font-bold">
+          Noite a partir de
+          <input
+            value={nightStarts}
+            onChange={(event) => setNightStarts(event.target.value)}
+            placeholder="22:00"
+            className="mt-1 w-full border rounded-lg p-2 text-sm"
+          />
+        </label>
+      </div>
       <ImagePicker
         label="Logo da loja"
         kind="logo"
@@ -111,7 +162,9 @@ function StoreTab({ catalog }: { catalog: StoreCatalog }) {
         onChange={setLogoUrl}
       />
       <p className="text-[11px] text-gray-500">
-        Aberto/fechado para pedidos é controlado no topo do painel da cozinha.
+        Abrir, fechar e pausar por alta demanda fica no topo do painel. O
+        WhatsApp da loja só recebe mensagem se a cliente apertar “Falar sobre
+        meu pedido”.
       </p>
       <SuccessNotice message={saved ? "Dados da loja salvos." : null} />
       <button className="bg-slate-900 text-white text-xs font-bold px-4 py-2 rounded-lg">
@@ -155,6 +208,7 @@ function MenuTab({ catalog }: { catalog: StoreCatalog }) {
       price: Number(price.replace(",", ".")) || 0,
       image_url: imageUrl.trim() || null,
       active: true,
+      sold_out: false,
     });
     setName("");
     setDescription("");
@@ -234,8 +288,18 @@ function MenuTab({ catalog }: { catalog: StoreCatalog }) {
                       />
                     ) : null}
                     {product.name} · {formatCurrency(product.price)}
+                    {product.sold_out ? (
+                      <span className="ml-2 text-[11px] font-bold text-red-600">ESGOTADO</span>
+                    ) : null}
                   </span>
                   <div className="flex gap-2">
+                    <button
+                      type="button"
+                      className="text-xs font-bold"
+                      onClick={() => setProductSoldOut(product.id, !product.sold_out)}
+                    >
+                      {product.sold_out ? "Disponível" : "Esgotado"}
+                    </button>
                     <button
                       type="button"
                       className="text-xs font-bold"
@@ -602,5 +666,82 @@ function PaymentTab({ catalog }: { catalog: StoreCatalog }) {
         Salvar chave PIX
       </button>
     </form>
+  );
+}
+
+function CouponsTab({ catalog }: { catalog: StoreCatalog }) {
+  const [code, setCode] = useState("");
+  const [type, setType] = useState<Coupon["type"]>("percent");
+  const [value, setValue] = useState("10");
+  const [firstOnly, setFirstOnly] = useState(true);
+  const coupons = getStoreCoupons(catalog.store.id);
+
+  function add(event: FormEvent) {
+    event.preventDefault();
+    if (!code.trim()) return;
+    saveCoupon({
+      id: crypto.randomUUID(),
+      store_id: catalog.store.id,
+      code: code.trim().toUpperCase(),
+      type,
+      value: Number(value.replace(",", ".")) || 0,
+      first_order_only: firstOnly,
+      active: true,
+    });
+    setCode("");
+  }
+
+  return (
+    <div className="space-y-3">
+      <form onSubmit={add} className="bg-white p-4 rounded-xl border grid gap-2 md:grid-cols-2">
+        <input
+          value={code}
+          onChange={(event) => setCode(event.target.value.toUpperCase())}
+          placeholder="Código (ex: BERTIOGA10)"
+          className="border rounded-lg p-2 text-sm md:col-span-2"
+        />
+        <select
+          value={type}
+          onChange={(event) => setType(event.target.value as Coupon["type"])}
+          className="border rounded-lg p-2 text-sm"
+        >
+          <option value="percent">Porcentagem</option>
+          <option value="fixed">Valor fixo</option>
+        </select>
+        <input
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+          placeholder="10 ou 5,00"
+          className="border rounded-lg p-2 text-sm"
+        />
+        <label className="text-xs font-bold flex items-center gap-2 md:col-span-2">
+          <input
+            type="checkbox"
+            checked={firstOnly}
+            onChange={(event) => setFirstOnly(event.target.checked)}
+          />
+          Só na primeira compra
+        </label>
+        <button className="md:col-span-2 bg-slate-900 text-white text-xs font-bold py-2 rounded-lg">
+          Salvar cupom
+        </button>
+      </form>
+      {coupons.map((coupon) => (
+        <div key={coupon.id} className="bg-white border rounded-xl p-3 flex justify-between text-sm">
+          <span>
+            <strong>{coupon.code}</strong> ·{" "}
+            {coupon.type === "percent" ? `${coupon.value}%` : formatCurrency(coupon.value)}
+            {coupon.first_order_only ? " · 1ª compra" : ""}
+          </span>
+          <button
+            type="button"
+            className="text-xs font-bold text-red-600"
+            onClick={() => removeCoupon(coupon.id)}
+          >
+            Remover
+          </button>
+        </div>
+      ))}
+    </div>
   );
 }

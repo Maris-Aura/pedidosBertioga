@@ -15,6 +15,7 @@ import type { OrderStatus, OrderWithDetails, StoreCatalog } from "@/lib/types";
 import { SoundAlert } from "./SoundAlert";
 import { OrderCard } from "./OrderCard";
 import { ThermalReceipt } from "./ThermalReceipt";
+import { startOrdersPolling } from "@/lib/orders-sync";
 
 export function KdsPanel({ storeSlug }: { storeSlug: string }) {
   const [catalog, setCatalog] = useState<StoreCatalog | null>(null);
@@ -53,7 +54,13 @@ export function KdsPanel({ storeSlug }: { storeSlug: string }) {
     };
 
     load();
-    return subscribeDemoDb(load);
+    const data = getStoreCatalog(storeSlug);
+    const stopPoll = data ? startOrdersPolling(data.store.id, load) : undefined;
+    const unsub = subscribeDemoDb(load);
+    return () => {
+      unsub();
+      stopPoll?.();
+    };
   }, [storeSlug]);
 
   useEffect(() => {
@@ -137,6 +144,7 @@ export function KdsPanel({ storeSlug }: { storeSlug: string }) {
                 <OrderCard
                   key={order.id}
                   store={catalog.store}
+                  storeSlug={storeSlug}
                   order={order}
                   couriers={catalog.couriers}
                   onAdvance={() => advance(order)}
@@ -180,6 +188,7 @@ export function KdsPanel({ storeSlug }: { storeSlug: string }) {
                 <OrderCard
                   key={order.id}
                   store={catalog.store}
+                  storeSlug={storeSlug}
                   order={order}
                   couriers={catalog.couriers}
                   onAdvance={() => advance(order)}

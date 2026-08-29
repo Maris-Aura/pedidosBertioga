@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useCart } from "@/context/CartContext";
 import { getStoreCatalog, subscribeDemoDb } from "@/lib/demo-db";
+import { storeAvailability } from "@/lib/store-hours";
+import Link from "next/link";
 import type { CatalogProduct, StoreCatalog } from "@/lib/types";
 import { contrastText, formatCurrency } from "@/lib/format";
 import { ProductModal } from "./ProductModal";
@@ -48,6 +50,8 @@ export function MenuView({ storeSlug }: { storeSlug: string }) {
   }
 
   const ink = contrastText(store.primary_color);
+  const availability = storeAvailability(store);
+  const open = availability.receiving;
 
   return (
     <div className="max-w-4xl mx-auto p-4 pb-36 space-y-5">
@@ -59,12 +63,14 @@ export function MenuView({ storeSlug }: { storeSlug: string }) {
         <p className="text-sm font-medium mt-1 opacity-90">
           {store.hours} · personalize cada item e envie o pedido.
         </p>
+        <Link href={`/${storeSlug}/conta`} className="text-xs font-bold underline mt-2 inline-block">
+          Meus pedidos
+        </Link>
       </div>
 
-      {!store.accepting_orders ? (
+      {!open ? (
         <p className="text-sm font-bold text-red-800 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
-          A loja está fechada no momento. Você pode olhar o cardápio, mas ainda
-          não dá para enviar pedido.
+          {availability.reason}
         </p>
       ) : null}
 
@@ -139,7 +145,7 @@ export function MenuView({ storeSlug }: { storeSlug: string }) {
                   </div>
                   <button
                     type="button"
-                    disabled={!store.accepting_orders}
+                    disabled={!open}
                     onClick={() => setSelected(product)}
                     className="self-center bg-slate-900 text-white px-3 py-2 rounded-lg text-sm font-bold hover:bg-slate-800 shrink-0 inline-flex items-center gap-1 disabled:opacity-40"
                   >

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCart } from "@/context/CartContext";
 import { contrastText, formatCurrency } from "@/lib/format";
+import { storeIsReceivingOrders } from "@/lib/store-hours";
 
 export function CartBar({ storeSlug }: { storeSlug: string }) {
   const { items, itemCount, subtotal, store } = useCart();
@@ -32,7 +33,7 @@ export function CartBar({ storeSlug }: { storeSlug: string }) {
           </div>
           <div className="font-bold text-lg">{formatCurrency(subtotal)}</div>
         </div>
-        {store.accepting_orders ? (
+        {storeIsReceivingOrders(store) ? (
           <Link
             href={`/${storeSlug}/checkout`}
             className="font-extrabold px-5 py-2.5 rounded-lg text-sm hover:opacity-90 shrink-0"

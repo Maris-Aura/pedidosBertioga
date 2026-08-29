@@ -3,15 +3,21 @@
 import { useEffect, useState } from "react";
 import { Clock } from "lucide-react";
 import { getOrderById, getStoreBySlug, subscribeDemoDb } from "@/lib/demo-db";
+import { pullOrderById } from "@/lib/orders-sync";
+import { MapPreview } from "@/components/ui/MapPreview";
+import { fullDeliveryAddress } from "@/lib/maps";
 import { buildPixCopyPaste } from "@/lib/pix";
 import {
   formatCurrency,
   ORDER_STATUS_FLOW,
   orderStatusLabel,
   PAYMENT_LABEL,
+  whatsappLink,
 } from "@/lib/format";
 import type { OrderStatus, OrderWithDetails, Store } from "@/lib/types";
 import { PixBlock } from "./PixBlock";
+import { customerTalkAboutOrderMessage } from "@/lib/dispatch";
+import { MessageCircle } from "lucide-react";
 
 export function OrderStatusTracker({
   storeSlug,
@@ -31,7 +37,19 @@ export function OrderStatusTracker({
       setReady(true);
     };
     load();
-    return subscribeDemoDb(load);
+    void pullOrderById(orderId).then((remote) => {
+      if (remote) setOrder(remote);
+    });
+    const timer = window.setInterval(() => {
+      void pullOrderById(orderId).then((remote) => {
+        if (remote) setOrder(getOrderById(orderId) ?? remote);
+      });
+    }, 12000);
+    const unsub = subscribeDemoDb(load);
+    return () => {
+      unsub();
+      window.clearInterval(timer);
+    };
   }, [orderId, storeSlug]);
 
   if (!ready) {
@@ -81,6 +99,13 @@ export function OrderStatusTracker({
           </p>
         </div>
 
+        {order.order_type === "delivery" && order.address ? (
+          <div className="text-left">
+            <p className="text-sm font-bold mb-2">{order.address}</p>
+            <MapPreview query={fullDeliveryAddress(order.address, order.neighborhood?.name)} />
+          </div>
+        ) : null}
+
         {pixCode ? (
           <PixBlock payload={pixCode} amount={order.total_amount} />
         ) : (
@@ -89,6 +114,18 @@ export function OrderStatusTracker({
             {order.change_for ? ` · Troco para ${formatCurrency(order.change_for)}` : ""}
           </p>
         )}
+
+        {store.whatsapp ? (
+          <a
+            href={whatsappLink(store.whatsapp, customerTalkAboutOrderMessage(store, order))}
+            target="_blank"
+            rel="noreferrer"
+            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm py-3 rounded-xl flex items-center justify-center gap-2"
+          >
+            <MessageCircle className="size-4" />
+            Falar sobre meu pedido
+          </a>
+        ) : null}
 
         <div className="space-y-4 pt-4 border-t text-left">
           <div className="font-bold text-sm text-gray-700">Status em Tempo Real:</div>

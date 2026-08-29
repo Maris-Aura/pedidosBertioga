@@ -11,9 +11,13 @@ import {
   whatsappLink,
   whatsappStatusMessage,
 } from "@/lib/format";
+import { fullDeliveryAddress } from "@/lib/maps";
+import { MapPreview } from "@/components/ui/MapPreview";
+import { courierDispatchMessage } from "@/lib/dispatch";
 
 export function OrderCard({
   store,
+  storeSlug,
   order,
   couriers,
   onAdvance,
@@ -21,6 +25,7 @@ export function OrderCard({
   onPrint,
 }: {
   store: Store;
+  storeSlug: string;
   order: OrderWithDetails;
   couriers: Courier[];
   onAdvance: () => void;
@@ -29,6 +34,26 @@ export function OrderCard({
 }) {
   const upcoming = nextStatus(order.status);
   const message = whatsappStatusMessage(order, store.name);
+  const selectedCourier = couriers.find((courier) => courier.id === order.courier_id);
+
+  function changeCourier(nextId: string) {
+    if (order.courier_id && nextId && nextId !== order.courier_id) {
+      const ok = window.confirm("Trocar o motoboy deste pedido?");
+      if (!ok) return;
+    }
+    onAssignCourier(nextId);
+  }
+
+  function notifyCourier() {
+    if (!selectedCourier?.phone || !order.courier_id) return;
+    window.open(
+      whatsappLink(
+        selectedCourier.phone,
+        courierDispatchMessage(store, storeSlug, order),
+      ),
+      "_blank",
+    );
+  }
 
   return (
     <article
@@ -99,16 +124,22 @@ export function OrderCard({
               : `${order.address ?? ""}${order.neighborhood ? ` (${order.neighborhood.name})` : ""}`}
           </strong>
         </div>
+        {order.order_type === "delivery" && order.address ? (
+          <MapPreview
+            compact
+            query={fullDeliveryAddress(order.address, order.neighborhood?.name)}
+          />
+        ) : null}
       </div>
 
       {order.order_type === "delivery" ? (
         <div>
           <label className="block text-xs font-bold text-gray-700 mb-1">
-            Entregador Responsável:
+            Entregador responsável — pode trocar se escolheu errado
           </label>
           <select
             value={order.courier_id ?? ""}
-            onChange={(event) => onAssignCourier(event.target.value)}
+            onChange={(event) => changeCourier(event.target.value)}
             className="w-full border rounded-lg p-2 text-xs bg-gray-50"
           >
             <option value="">Selecione o Motoboy...</option>
@@ -118,6 +149,15 @@ export function OrderCard({
               </option>
             ))}
           </select>
+          {selectedCourier?.phone ? (
+            <button
+              type="button"
+              onClick={notifyCourier}
+              className="mt-2 w-full bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs py-2 rounded-lg"
+            >
+              Enviar rota e link ao motoboy
+            </button>
+          ) : null}
         </div>
       ) : null}
 

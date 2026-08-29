@@ -19,6 +19,11 @@ export type Store = {
   accepting_orders: boolean;
   active: boolean;
   created_at: string;
+  whatsapp?: string;
+  extra_sunday_fee?: number;
+  extra_night_fee?: number;
+  night_starts_at?: string;
+  paused_high_demand?: boolean;
 };
 
 export type StoreUser = {
@@ -47,6 +52,7 @@ export type Product = {
   price: number;
   image_url: string | null;
   active: boolean;
+  sold_out?: boolean;
 };
 
 export type ProductOption = {
@@ -101,6 +107,8 @@ export type Order = {
   courier_id: string | null;
   notes: string | null;
   created_at: string;
+  coupon_code?: string | null;
+  discount?: number;
 };
 
 export type OrderItem = {
@@ -130,6 +138,7 @@ export type StoreCatalog = {
   products: CatalogProduct[];
   neighborhoods: Neighborhood[];
   couriers: Courier[];
+  coupons: Coupon[];
 };
 
 export type CartItem = {
@@ -140,6 +149,16 @@ export type CartItem = {
   unitPrice: number;
   observation: string;
   optionsSelected: SelectedOption[];
+};
+
+export type Coupon = {
+  id: string;
+  store_id: string;
+  code: string;
+  type: "percent" | "fixed";
+  value: number;
+  first_order_only: boolean;
+  active: boolean;
 };
 
 export type CheckoutPayload = {
@@ -154,6 +173,8 @@ export type CheckoutPayload = {
   notes: string | null;
   items: CartItem[];
   totalAmount: number;
+  couponCode?: string | null;
+  discount?: number;
 };
 
 export type SessionUser = {

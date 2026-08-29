@@ -11,6 +11,7 @@ import {
 import type {
   Category,
   CheckoutPayload,
+  Coupon,
   Courier,
   Neighborhood,
   OptionItem,
@@ -40,6 +41,7 @@ export type DemoDB = {
   couriers: Courier[];
   orders: Order[];
   order_items: OrderItem[];
+  coupons: Coupon[];
 };
 
 function seed(): DemoDB {
@@ -54,6 +56,7 @@ function seed(): DemoDB {
     couriers: structuredClone(SEED_COURIERS),
     orders: [],
     order_items: [],
+    coupons: [],
   };
 }
 
@@ -111,12 +114,41 @@ function migrateDb(db: DemoDB) {
       store.hours = "11:00–22:00";
       changed = true;
     }
+    if (store.whatsapp === undefined) {
+      store.whatsapp = "";
+      changed = true;
+    }
+    if (typeof store.extra_sunday_fee !== "number") {
+      store.extra_sunday_fee = 0;
+      changed = true;
+    }
+    if (typeof store.extra_night_fee !== "number") {
+      store.extra_night_fee = 0;
+      changed = true;
+    }
+    if (!store.night_starts_at) {
+      store.night_starts_at = "22:00";
+      changed = true;
+    }
+    if (typeof store.paused_high_demand !== "boolean") {
+      store.paused_high_demand = false;
+      changed = true;
+    }
+  }
+
+  if (!db.coupons) {
+    db.coupons = [];
+    changed = true;
   }
 
   for (const product of db.products) {
     const image = PRODUCT_IMAGES[product.id];
     if (image && !product.image_url) {
       product.image_url = image;
+      changed = true;
+    }
+    if (typeof product.sold_out !== "boolean") {
+      product.sold_out = false;
       changed = true;
     }
   }
@@ -202,7 +234,10 @@ export function getStoreBySlug(slug: string) {
   return readDb().stores.find((store) => store.slug === slug) ?? null;
 }
 
-export function getStoreCatalog(slug: string): StoreCatalog | null {
+export function getStoreCatalog(
+  slug: string,
+  options?: { includeSoldOut?: boolean },
+): StoreCatalog | null {
   const db = readDb();
   const store = db.stores.find((item) => item.slug === slug && item.active);
   if (!store) return null;
@@ -212,7 +247,12 @@ export function getStoreCatalog(slug: string): StoreCatalog | null {
     .sort((a, b) => a.order - b.order);
 
   const products = db.products
-    .filter((item) => item.store_id === store.id && item.active)
+    .filter(
+      (item) =>
+        item.store_id === store.id &&
+        item.active &&
+        (options?.includeSoldOut || !item.sold_out),
+    )
     .map((product) => ({
       ...product,
       options: db.product_options
@@ -229,6 +269,7 @@ export function getStoreCatalog(slug: string): StoreCatalog | null {
     products,
     neighborhoods: db.neighborhoods.filter((item) => item.store_id === store.id),
     couriers: db.couriers.filter((item) => item.store_id === store.id && item.active),
+    coupons: db.coupons.filter((item) => item.store_id === store.id && item.active),
   };
 }
 
@@ -244,6 +285,15 @@ export function getOrderById(orderId: string): OrderWithDetails | null {
   const db = readDb();
   const order = db.orders.find((item) => item.id === orderId);
   return order ? hydrateOrder(db, order) : null;
+}
+
+function persistOrder(order: OrderWithDetails) {
+  if (typeof window === "undefined") return;
+  void fetch("/api/orders", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(order),
+  }).catch(() => undefined);
 }
 
 function hydrateOrder(db: DemoDB, order: Order): OrderWithDetails {
@@ -273,6 +323,8 @@ export function createOrder(payload: CheckoutPayload): OrderWithDetails {
     courier_id: null,
     notes: payload.notes,
     created_at: new Date().toISOString(),
+    coupon_code: payload.couponCode ?? null,
+    discount: payload.discount ?? 0,
   };
 
   const items: OrderItem[] = payload.items.map((item) => ({
@@ -289,7 +341,9 @@ export function createOrder(payload: CheckoutPayload): OrderWithDetails {
   db.orders.unshift(order);
   db.order_items.push(...items);
   writeDb(db);
-  return hydrateOrder(db, order);
+  const hydrated = hydrateOrder(db, order);
+  void persistOrder(hydrated);
+  return hydrated;
 }
 
 export function updateOrderStatus(orderId: string, status: OrderStatus) {
@@ -298,7 +352,9 @@ export function updateOrderStatus(orderId: string, status: OrderStatus) {
   if (!order) return null;
   order.status = status;
   writeDb(db);
-  return hydrateOrder(db, order);
+  const hydrated = hydrateOrder(db, order);
+  void persistOrder(hydrated);
+  return hydrated;
 }
 
 export function assignCourier(orderId: string, courierId: string | null) {
@@ -307,7 +363,9 @@ export function assignCourier(orderId: string, courierId: string | null) {
   if (!order) return null;
   order.courier_id = courierId;
   writeDb(db);
-  return hydrateOrder(db, order);
+  const hydrated = hydrateOrder(db, order);
+  void persistOrder(hydrated);
+  return hydrated;
 }
 
 export function createTestDeliveryOrder(storeSlug: string) {
@@ -419,7 +477,21 @@ export function setStoreActive(storeId: string, active: boolean) {
 }
 
 export function setAcceptingOrders(storeId: string, accepting: boolean) {
-  return patchStore(storeId, { accepting_orders: accepting });
+  return patchStore(
+    storeId,
+    accepting
+      ? { accepting_orders: true }
+      : { accepting_orders: false, paused_high_demand: false },
+  );
+}
+
+export function setPausedHighDemand(storeId: string, paused: boolean) {
+  return patchStore(
+    storeId,
+    paused
+      ? { paused_high_demand: true, accepting_orders: true }
+      : { paused_high_demand: false },
+  );
 }
 
 export function createStoreAdmin(storeId: string, email: string, password: string) {
@@ -544,4 +616,61 @@ export function getStoreUsers(storeId?: string) {
   return storeId
     ? db.users.filter((item) => item.store_id === storeId)
     : db.users;
+}
+
+export function mergeRemoteOrders(orders: OrderWithDetails[]) {
+  if (orders.length === 0) return;
+  const db = readDb();
+  for (const incoming of orders) {
+    const { items, neighborhood: _n, courier: _c, ...plain } = incoming;
+    const existing = db.orders.find((item) => item.id === incoming.id);
+    if (existing) Object.assign(existing, plain);
+    else db.orders.unshift(plain);
+    db.order_items = db.order_items.filter((item) => item.order_id !== incoming.id);
+    db.order_items.push(...items);
+  }
+  writeDb(db);
+}
+
+export function getOrdersByPhone(storeId: string, phone: string) {
+  const digits = phone.replace(/\D/g, "");
+  return getOrdersByStore(storeId).filter(
+    (order) => order.customer_phone.replace(/\D/g, "") === digits,
+  );
+}
+
+export function setProductSoldOut(productId: string, soldOut: boolean) {
+  const db = readDb();
+  const product = db.products.find((item) => item.id === productId);
+  if (!product) return;
+  product.sold_out = soldOut;
+  writeDb(db);
+}
+
+export function saveCoupon(coupon: Coupon) {
+  const db = readDb();
+  const existing = db.coupons.find((item) => item.id === coupon.id);
+  if (existing) Object.assign(existing, coupon);
+  else db.coupons.push(coupon);
+  writeDb(db);
+}
+
+export function removeCoupon(id: string) {
+  const db = readDb();
+  db.coupons = db.coupons.filter((item) => item.id !== id);
+  writeDb(db);
+}
+
+export function getStoreCoupons(storeId: string) {
+  return readDb().coupons.filter((item) => item.store_id === storeId);
+}
+
+export function findCoupon(storeId: string, code: string) {
+  const normalized = code.trim().toUpperCase();
+  return (
+    readDb().coupons.find(
+      (item) =>
+        item.store_id === storeId && item.active && item.code.toUpperCase() === normalized,
+    ) ?? null
+  );
 }

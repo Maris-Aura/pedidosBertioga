@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { CartProvider } from "@/context/CartContext";
 import { getStoreBySlug, subscribeDemoDb } from "@/lib/demo-db";
+import { storeAvailability } from "@/lib/store-hours";
 import type { Store } from "@/lib/types";
 import { StoreMark } from "@/components/ui/StoreMark";
 
@@ -65,15 +66,22 @@ export function StoreShell({
               </span>
             </span>
           </Link>
-          <span
-            className={`text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0 ${
-              store.accepting_orders
-                ? "bg-emerald-400/20 text-emerald-200"
-                : "bg-red-400/20 text-red-200"
-            }`}
-          >
-            {store.accepting_orders ? "Aberta" : "Fechada"}
-          </span>
+          <div className="flex items-center gap-2 shrink-0">
+            <Link href={`/${store.slug}/conta`} className="text-[11px] font-bold text-slate-200">
+              Meus pedidos
+            </Link>
+            <span
+              className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${
+                storeAvailability(store).receiving
+                  ? "bg-emerald-400/20 text-emerald-200"
+                  : store.paused_high_demand
+                    ? "bg-amber-400/20 text-amber-200"
+                    : "bg-red-400/20 text-red-200"
+              }`}
+            >
+              {storeAvailability(store).label}
+            </span>
+          </div>
         </div>
       </header>
       <CartProvider store={store}>{children}</CartProvider>

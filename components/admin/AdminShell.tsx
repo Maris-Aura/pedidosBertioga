@@ -7,6 +7,7 @@ import {
   demoLogout,
   getStoreBySlug,
   setAcceptingOrders,
+  setPausedHighDemand,
   subscribeDemoDb,
 } from "@/lib/demo-db";
 import type { Store } from "@/lib/types";
@@ -61,6 +62,19 @@ export function AdminShell({
             >
               {store.accepting_orders ? "Loja aberta" : "Loja fechada"}
             </button>
+            {store.accepting_orders ? (
+              <button
+                type="button"
+                onClick={() => setPausedHighDemand(store.id, !store.paused_high_demand)}
+                className={`text-[11px] font-bold px-2.5 py-1.5 rounded-full ${
+                  store.paused_high_demand
+                    ? "bg-amber-400 text-slate-950"
+                    : "bg-slate-700 text-white"
+                }`}
+              >
+                {store.paused_high_demand ? "Retomar pedidos" : "Pausar demanda"}
+              </button>
+            ) : null}
             <Link
               href={`/${storeSlug}/admin`}
               className={`text-xs px-3 py-1.5 rounded-lg font-bold ${
