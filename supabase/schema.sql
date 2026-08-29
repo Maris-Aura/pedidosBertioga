@@ -103,8 +103,17 @@ create table if not exists public.order_items (
   options_selected_json jsonb not null default '[]'::jsonb
 );
 
+create table if not exists public.store_admins (
+  id text primary key,
+  store_id text not null,
+  email text not null unique,
+  password_digest text not null,
+  created_at timestamptz not null default now()
+);
+
 alter table public.stores enable row level security;
 alter table public.store_users enable row level security;
+alter table public.store_admins enable row level security;
 alter table public.categories enable row level security;
 alter table public.products enable row level security;
 alter table public.product_options enable row level security;
@@ -113,6 +122,9 @@ alter table public.neighborhoods enable row level security;
 alter table public.couriers enable row level security;
 alter table public.orders enable row level security;
 alter table public.order_items enable row level security;
+
+create policy "store_admins_server" on public.store_admins
+  for all using (true) with check (true);
 
 create policy "stores_public_read" on public.stores
   for select using (active = true);

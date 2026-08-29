@@ -1,9 +1,8 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   createStoreAdmin,
-  getStoreUsers,
   removeStoreAdmin,
   updateStoreAdmin,
 } from "@/lib/demo-db";
@@ -11,6 +10,20 @@ import type { Store, StoreUser } from "@/lib/types";
 import { FieldNotice, SuccessNotice } from "@/components/ui/Notice";
 import { PasswordField } from "@/components/ui/PasswordField";
 import { Eye, EyeOff } from "lucide-react";
+
+function mergeUsers(local: StoreUser[], remote: StoreUser[]) {
+  const byEmail = new Map<string, StoreUser>();
+  for (const user of [...remote, ...local]) {
+    if (user.role !== "admin") continue;
+    const current = byEmail.get(user.email);
+    byEmail.set(user.email, {
+      ...current,
+      ...user,
+      password: user.password || current?.password,
+    });
+  }
+  return [...byEmail.values()];
+}
 
 export function MasterStoreUsers({
   stores,
@@ -28,14 +41,34 @@ export function MasterStoreUsers({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({});
   const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
+  const [remoteUsers, setRemoteUsers] = useState<StoreUser[]>([]);
 
   const storeName = stores.find((store) => store.id === storeId)?.name ?? "a loja";
-  const storeUsers = useMemo(
-    () => users.filter((user) => user.role === "admin" && user.store_id === storeId),
-    [storeId, users],
+  const allUsers = useMemo(
+    () => mergeUsers(users, remoteUsers),
+    [remoteUsers, users],
   );
+  const storeUsers = useMemo(
+    () => allUsers.filter((user) => user.store_id === storeId),
+    [allUsers, storeId],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/store-users", { credentials: "include" })
+      .then(async (response) => {
+        if (!response.ok) return;
+        const data = (await response.json()) as { users?: StoreUser[] };
+        if (!cancelled) setRemoteUsers(data.users ?? []);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function flash(message: string) {
     setNotice(message);
@@ -56,33 +89,89 @@ export function MasterStoreUsers({
     setPending(true);
   }
 
-  function confirmCreate() {
-    const result = createStoreAdmin(storeId, email, password);
-    if (!result.ok) {
-      setError(result.error);
+  async function confirmCreate() {
+    setSaving(true);
+    try {
+      const response = await fetch("/api/store-users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ storeId, email, password }),
+      });
+      const data = (await response.json()) as {
+        error?: string;
+        users?: StoreUser[];
+      };
+
+      const local = createStoreAdmin(storeId, email, password);
+      if (!response.ok && !local.ok) {
+        setError(data.error || local.error);
+        return;
+      }
+
+      if (data.users) setRemoteUsers(data.users);
+      setEmail("");
+      setPassword("");
+      setConfirm("");
+      setShowPassword(false);
+      setShowConfirm(false);
       setPending(false);
-      return;
+      flash("Usuário cadastrado. Já pode entrar no painel da loja.");
+    } catch {
+      const local = createStoreAdmin(storeId, email, password);
+      if (!local.ok) {
+        setError(local.error);
+        return;
+      }
+      setEmail("");
+      setPassword("");
+      setConfirm("");
+      setPending(false);
+      flash("Usuário cadastrado neste aparelho.");
+    } finally {
+      setSaving(false);
     }
-    setEmail("");
-    setPassword("");
-    setConfirm("");
-    setShowPassword(false);
-    setShowConfirm(false);
-    setPending(false);
-    flash("Usuário cadastrado.");
   }
 
-  function changePassword(user: StoreUser, nextPassword: string) {
+  async function changePassword(user: StoreUser, nextPassword: string) {
     if (nextPassword.length < 6) {
       setError("A nova senha precisa ter pelo menos 6 caracteres.");
       return;
     }
-    const result = updateStoreAdmin(user.id, { password: nextPassword });
-    if (!result.ok) {
-      setError(result.error);
+    const response = await fetch(`/api/store-users/${user.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ password: nextPassword }),
+    }).catch(() => null);
+    const local = updateStoreAdmin(user.id, { password: nextPassword });
+    if (response?.ok) {
+      const data = (await response.json()) as { users?: StoreUser[] };
+      if (data.users) setRemoteUsers(data.users);
+    }
+    if (!response?.ok && !local.ok) {
+      setError(local.error);
       return;
     }
     flash("Senha atualizada.");
+  }
+
+  async function removeUser(userId: string) {
+    const response = await fetch(`/api/store-users/${userId}`, {
+      method: "DELETE",
+      credentials: "include",
+    }).catch(() => null);
+    const local = removeStoreAdmin(userId);
+    setConfirmRemoveId(null);
+    if (response?.ok) {
+      const data = (await response.json()) as { users?: StoreUser[] };
+      if (data.users) setRemoteUsers(data.users);
+    }
+    if (!response?.ok && !local.ok) {
+      setError(local.error);
+      return;
+    }
+    flash("Usuário removido.");
   }
 
   return (
@@ -90,7 +179,8 @@ export function MasterStoreUsers({
       <div>
         <h2 className="font-bold">Usuários de cada loja</h2>
         <p className="text-xs text-gray-500 mt-1">
-          Cadastre, veja a senha e remova o acesso dos atendentes.
+          Cadastre o atendente aqui e use o mesmo e-mail e senha em /acai/admin ou
+          /burger/admin.
         </p>
       </div>
 
@@ -130,15 +220,11 @@ export function MasterStoreUsers({
               onAskRemove={() => setConfirmRemoveId(user.id)}
               onCancelRemove={() => setConfirmRemoveId(null)}
               onRemove={() => {
-                const result = removeStoreAdmin(user.id);
-                setConfirmRemoveId(null);
-                if (!result.ok) {
-                  setError(result.error);
-                  return;
-                }
-                flash("Usuário removido.");
+                void removeUser(user.id);
               }}
-              onChangePassword={(next) => changePassword(user, next)}
+              onChangePassword={(next) => {
+                void changePassword(user, next);
+              }}
             />
           ))
         )}
@@ -209,16 +295,20 @@ export function MasterStoreUsers({
               <button
                 type="button"
                 onClick={() => setPending(false)}
+                disabled={saving}
                 className="w-1/2 bg-gray-100 font-bold py-2.5 rounded-xl text-sm"
               >
                 Cancelar
               </button>
               <button
                 type="button"
-                onClick={confirmCreate}
-                className="w-1/2 bg-slate-900 text-white font-bold py-2.5 rounded-xl text-sm"
+                onClick={() => {
+                  void confirmCreate();
+                }}
+                disabled={saving}
+                className="w-1/2 bg-slate-900 text-white font-bold py-2.5 rounded-xl text-sm disabled:opacity-60"
               >
-                Confirmar cadastro
+                {saving ? "Salvando..." : "Confirmar cadastro"}
               </button>
             </div>
           </div>
@@ -249,6 +339,7 @@ function UserRow({
 }) {
   const [nextPassword, setNextPassword] = useState("");
   const [showNext, setShowNext] = useState(false);
+  const passwordLabel = user.password || "salva no servidor";
 
   return (
     <div className="border rounded-xl p-3 space-y-2">
@@ -257,9 +348,7 @@ function UserRow({
           <div className="font-bold text-sm">{user.email}</div>
           <div className="text-xs text-gray-500 flex items-center gap-2">
             Senha:{" "}
-            <span className="font-mono">
-              {reveal ? user.password || "—" : "••••••••"}
-            </span>
+            <span className="font-mono">{reveal ? passwordLabel : "••••••••"}</span>
             <button
               type="button"
               onClick={() => onReveal(!reveal)}

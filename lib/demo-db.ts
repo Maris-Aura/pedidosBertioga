@@ -311,11 +311,13 @@ export function assignCourier(orderId: string, courierId: string | null) {
 }
 
 export function demoLogin(email: string, password: string) {
+  const normalized = email.trim().toLowerCase();
+  const pass = password.trim();
   const user = readDb().users.find(
     (item) =>
       item.role !== "master" &&
-      item.email.toLowerCase() === email.toLowerCase() &&
-      item.password === password,
+      item.email.toLowerCase() === normalized &&
+      item.password === pass,
   );
   if (!user) return null;
   const session = {

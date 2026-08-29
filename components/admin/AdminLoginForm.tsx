@@ -10,21 +10,61 @@ export function AdminLoginForm({ storeSlug }: { storeSlug: string }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
   const store = getStoreBySlug(storeSlug);
 
-  function onSubmit(event: FormEvent) {
+  async function onSubmit(event: FormEvent) {
     event.preventDefault();
-    const session = demoLogin(email, password);
-    if (!session || (session.role !== "admin" && session.role !== "master")) {
-      setError("E-mail ou senha inválidos.");
-      return;
+    setError("");
+    setPending(true);
+
+    try {
+      const response = await fetch("/api/auth/store-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          email: email.trim(),
+          password: password.trim(),
+          storeId: store?.id,
+        }),
+      });
+      const data = (await response.json()) as { error?: string };
+
+      if (response.ok) {
+        router.push(`/${storeSlug}/admin`);
+        router.refresh();
+        return;
+      }
+
+      if (response.status === 403) {
+        setError(data.error || "Este usuário não pertence a esta loja.");
+        return;
+      }
+
+      const session = demoLogin(email, password);
+      if (!session || (session.role !== "admin" && session.role !== "master")) {
+        setError(data.error || "E-mail ou senha inválidos.");
+        return;
+      }
+      if (session.role === "admin" && store && session.storeId !== store.id) {
+        setError("Este usuário não pertence a esta loja.");
+        return;
+      }
+      router.push(`/${storeSlug}/admin`);
+      router.refresh();
+    } catch {
+      const session = demoLogin(email, password);
+      if (!session) {
+        setError("E-mail ou senha inválidos.");
+        setPending(false);
+        return;
+      }
+      router.push(`/${storeSlug}/admin`);
+      router.refresh();
+    } finally {
+      setPending(false);
     }
-    if (session.role === "admin" && store && session.storeId !== store.id) {
-      setError("Este usuário não pertence a esta loja.");
-      return;
-    }
-    router.push(`/${storeSlug}/admin`);
-    router.refresh();
   }
 
   return (
@@ -44,6 +84,7 @@ export function AdminLoginForm({ storeSlug }: { storeSlug: string }) {
           value={email}
           onChange={(event) => setEmail(event.target.value)}
           className="mt-1 w-full border rounded-lg p-2 text-sm"
+          autoComplete="username"
           required
         />
       </label>
@@ -54,14 +95,16 @@ export function AdminLoginForm({ storeSlug }: { storeSlug: string }) {
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           className="mt-1 w-full border rounded-lg p-2 text-sm"
+          autoComplete="current-password"
           required
         />
       </label>
       <button
         type="submit"
-        className="w-full bg-slate-900 text-white font-bold py-2.5 rounded-xl"
+        disabled={pending}
+        className="w-full bg-slate-900 text-white font-bold py-2.5 rounded-xl disabled:opacity-60"
       >
-        Entrar
+        {pending ? "Entrando..." : "Entrar"}
       </button>
     </form>
   );

@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSupabaseSession } from "@/lib/supabase/middleware";
-import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { masterCookieName, verifyMasterSession } from "@/lib/auth/master";
+import { STORE_SESSION_COOKIE } from "@/lib/auth/cookies";
 
 function isProtectedAdmin(pathname: string) {
   return /^\/[^/]+\/admin(?:\/.*)?$/.test(pathname) && !pathname.includes("/admin/login");
@@ -11,15 +11,23 @@ function isProtectedMaster(pathname: string) {
   return pathname.startsWith("/master") && pathname !== "/master/login";
 }
 
+function parseStoreSession(raw: string | undefined) {
+  if (!raw) return null;
+  for (const value of [raw, decodeURIComponent(raw)]) {
+    try {
+      return JSON.parse(value) as { role?: string; storeId?: string | null };
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const response = await updateSupabaseSession(request);
 
   if (!isProtectedAdmin(pathname) && !isProtectedMaster(pathname)) {
-    return response;
-  }
-
-  if (isSupabaseConfigured()) {
     return response;
   }
 
@@ -34,20 +42,11 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
-  const raw = request.cookies.get("pb_session")?.value;
-  let session: { role?: string; storeId?: string | null } | null = null;
-  if (raw) {
-    try {
-      session = JSON.parse(decodeURIComponent(raw));
-    } catch {
-      session = null;
-    }
-  }
-
   if (isProtectedAdmin(pathname)) {
-    const storeSlug = pathname.split("/")[1];
     if (masterSession) return response;
+    const session = parseStoreSession(request.cookies.get(STORE_SESSION_COOKIE)?.value);
     if (session?.role !== "admin") {
+      const storeSlug = pathname.split("/")[1];
       return NextResponse.redirect(new URL(`/${storeSlug}/admin/login`, request.url));
     }
   }
