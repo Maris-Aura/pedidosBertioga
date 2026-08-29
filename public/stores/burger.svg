@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Carioca Burguers">
+  <rect width="64" height="64" rx="16" fill="#dc2626"/>
+  <ellipse cx="32" cy="24" rx="18" ry="8" fill="#fbbf24"/>
+  <rect x="14" y="30" width="36" height="6" rx="2" fill="#7f1d1d"/>
+  <rect x="14" y="38" width="36" height="5" rx="2" fill="#166534"/>
+  <ellipse cx="32" cy="48" rx="18" ry="7" fill="#b45309"/>
+</svg>
