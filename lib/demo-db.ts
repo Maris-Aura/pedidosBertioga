@@ -390,15 +390,49 @@ export function setAcceptingOrders(storeId: string, accepting: boolean) {
 
 export function createStoreAdmin(storeId: string, email: string, password: string) {
   const db = readDb();
+  const normalized = email.trim().toLowerCase();
+  if (db.users.some((item) => item.email.toLowerCase() === normalized)) {
+    return { ok: false as const, error: "Este e-mail já está cadastrado." };
+  }
   db.users.push({
     id: uid("user"),
     user_id: uid("user"),
     store_id: storeId,
     role: "admin",
-    email,
+    email: normalized,
     password,
   });
   writeDb(db);
+  return { ok: true as const };
+}
+
+export function updateStoreAdmin(
+  userId: string,
+  patch: { email?: string; password?: string },
+) {
+  const db = readDb();
+  const user = db.users.find((item) => item.id === userId && item.role === "admin");
+  if (!user) return { ok: false as const, error: "Usuário não encontrado." };
+  if (patch.email) {
+    const normalized = patch.email.trim().toLowerCase();
+    const taken = db.users.some(
+      (item) => item.id !== userId && item.email.toLowerCase() === normalized,
+    );
+    if (taken) return { ok: false as const, error: "Este e-mail já está cadastrado." };
+    user.email = normalized;
+  }
+  if (patch.password) user.password = patch.password;
+  writeDb(db);
+  return { ok: true as const };
+}
+
+export function removeStoreAdmin(userId: string) {
+  const db = readDb();
+  const user = db.users.find((item) => item.id === userId && item.role === "admin");
+  if (!user) return { ok: false as const, error: "Usuário não encontrado." };
+  db.users = db.users.filter((item) => item.id !== userId);
+  writeDb(db);
+  return { ok: true as const };
 }
 
 export function saveCategory(category: Category) {

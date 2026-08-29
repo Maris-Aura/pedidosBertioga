@@ -3,16 +3,17 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  createStoreAdmin,
   getAllStores,
+  getStoreUsers,
   setStoreActive,
   subscribeDemoDb,
   upsertStore,
 } from "@/lib/demo-db";
 import { SITE_NAME } from "@/lib/site";
-import type { Store } from "@/lib/types";
+import type { Store, StoreUser } from "@/lib/types";
 import { StoreMark } from "@/components/ui/StoreMark";
 import { SuccessNotice } from "@/components/ui/Notice";
+import { MasterStoreUsers } from "./MasterStoreUsers";
 
 export function MasterDashboard() {
   const router = useRouter();
@@ -23,20 +24,17 @@ export function MasterDashboard() {
   const [pixKey, setPixKey] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
   const [hours, setHours] = useState("11:00–22:00");
-  const [adminEmail, setAdminEmail] = useState("");
-  const [adminPassword, setAdminPassword] = useState("");
-  const [targetStoreId, setTargetStoreId] = useState("");
+  const [users, setUsers] = useState<StoreUser[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     const load = () => {
-      const list = getAllStores();
-      setStores(list);
-      if (!targetStoreId && list[0]) setTargetStoreId(list[0].id);
+      setStores(getAllStores());
+      setUsers(getStoreUsers());
     };
     load();
     return subscribeDemoDb(load);
-  }, [targetStoreId]);
+  }, []);
 
   function flash(message: string) {
     setNotice(message);
@@ -60,15 +58,6 @@ export function MasterDashboard() {
     setPixKey("");
     setLogoUrl("");
     flash("Loja criada.");
-  }
-
-  function createAdmin(event: FormEvent) {
-    event.preventDefault();
-    if (!targetStoreId) return;
-    createStoreAdmin(targetStoreId, adminEmail.trim(), adminPassword);
-    setAdminEmail("");
-    setAdminPassword("");
-    flash("Conta da loja criada.");
   }
 
   return (
@@ -138,37 +127,7 @@ export function MasterDashboard() {
         </button>
       </form>
 
-      <form onSubmit={createAdmin} className="bg-white p-5 rounded-xl border grid gap-3 md:grid-cols-2">
-        <h2 className="font-bold md:col-span-2">Criar conta de administrador da loja</h2>
-        <select
-          value={targetStoreId}
-          onChange={(event) => setTargetStoreId(event.target.value)}
-          className="border rounded-lg p-2 text-sm"
-        >
-          {stores.map((store) => (
-            <option key={store.id} value={store.id}>
-              {store.name}
-            </option>
-          ))}
-        </select>
-        <input
-          type="email"
-          value={adminEmail}
-          onChange={(event) => setAdminEmail(event.target.value)}
-          placeholder="E-mail"
-          className="border rounded-lg p-2 text-sm"
-          required
-        />
-        <input
-          type="password"
-          value={adminPassword}
-          onChange={(event) => setAdminPassword(event.target.value)}
-          placeholder="Senha"
-          className="border rounded-lg p-2 text-sm"
-          required
-        />
-        <button className="bg-slate-900 text-white font-bold py-2 rounded-lg">Criar usuário</button>
-      </form>
+      {stores.length > 0 ? <MasterStoreUsers stores={stores} users={users} /> : null}
 
       <section className="space-y-2">
         {stores.map((store) => (
@@ -181,7 +140,9 @@ export function MasterDashboard() {
               <div className="min-w-0">
                 <div className="font-bold">{store.name}</div>
                 <div className="text-xs text-gray-500">
-                  /{store.slug} · {store.hours} · PIX: {store.pix_key || "não cadastrada"}
+                  /{store.slug} · {store.hours} ·{" "}
+                  {users.filter((user) => user.store_id === store.id && user.role === "admin").length}{" "}
+                  usuário(s)
                 </div>
               </div>
             </div>
